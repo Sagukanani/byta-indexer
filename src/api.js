@@ -1,7 +1,12 @@
 const express = require("express");
+const cors = require("cors");
 const db = require("./db");
 
 const app = express();
+
+/* ===== MIDDLEWARE ===== */
+app.use(cors());              // 👈 यही CORS fix है
+app.use(express.json());
 
 /**
  * FULL TEAM API
@@ -12,36 +17,20 @@ const app = express();
 app.get("/team/:address", (req, res) => {
   const root = req.params.address.toLowerCase();
 
-  // सभी downline निकालो
-  const rows = db
-    .prepare(`
-      SELECT address, referrer, side, level
-      FROM users
-      WHERE address != ?
-      AND (
-        referrer = ?
-        OR referrer IN (
-          SELECT address FROM users WHERE referrer = ?
-        )
-      )
-    `)
-    .all(root, root, root);
-
-  // अगर future में deeper tree हो, तो safer तरीका:
-  // recursive JS traversal
+  // recursive traversal (safe for future depth)
   const all = [];
-  const queue = [{ address: root, level: 0 }];
+  const queue = [{ address: root }];
 
   while (queue.length) {
     const current = queue.shift();
 
     const children = db
-      .prepare("SELECT * FROM users WHERE referrer = ?")
+      .prepare("SELECT address, referrer, side, level FROM users WHERE referrer = ?")
       .all(current.address);
 
     for (const c of children) {
       all.push(c);
-      queue.push({ address: c.address, level: c.level });
+      queue.push({ address: c.address });
     }
   }
 
