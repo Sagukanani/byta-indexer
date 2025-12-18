@@ -16,4 +16,11 @@ CREATE INDEX IF NOT EXISTS idx_users_referrer
 ON users(referrer);
 `);
 
+db.exec(`
+CREATE TABLE IF NOT EXISTS meta (
+  key TEXT PRIMARY KEY,
+  value TEXT
+);
+`);
+
 module.exports = db;

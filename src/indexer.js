@@ -9,8 +9,30 @@ const iface = new ethers.Interface([
   "event ReferralLinked(address indexed user, address indexed referrer, bool isLeft)"
 ]);
 
-let lastBlock = Number(process.env.START_BLOCK || 0);
-const CHUNK_SIZE = 5;
+const CHUNK_SIZE = 1000; // 🔥 production-friendly
+
+/* ===== lastBlock persistence ===== */
+
+function getLastBlock() {
+  const row = db
+    .prepare("SELECT value FROM meta WHERE key='lastBlock'")
+    .get();
+  return row
+    ? Number(row.value)
+    : Number(process.env.START_BLOCK || 0);
+}
+
+function setLastBlock(block) {
+  db.prepare(`
+    INSERT INTO meta(key, value)
+    VALUES ('lastBlock', ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(String(block));
+}
+
+let lastBlock = getLastBlock();
+
+/* ===== user upsert ===== */
 
 function upsertUser(user, referrer, side) {
   const parent = db
@@ -20,20 +42,21 @@ function upsertUser(user, referrer, side) {
   const level = parent ? parent.level + 1 : 1;
 
   db.prepare(`
-  INSERT INTO users(address, referrer, side, level)
-  VALUES (?, ?, ?, ?)
-  ON CONFLICT(address) DO UPDATE SET
-    referrer = excluded.referrer,
-    side = excluded.side,
-    level = excluded.level
-`).run(
-  user.toLowerCase(),
-  referrer.toLowerCase(),
-  side,
-  level
-);
-
+    INSERT INTO users(address, referrer, side, level)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(address) DO UPDATE SET
+      referrer = excluded.referrer,
+      side = excluded.side,
+      level = excluded.level
+  `).run(
+    user.toLowerCase(),
+    referrer.toLowerCase(),
+    side,
+    level
+  );
 }
+
+/* ===== poll loop ===== */
 
 async function poll() {
   try {
@@ -43,13 +66,12 @@ async function poll() {
     const toBlock = Math.min(lastBlock + CHUNK_SIZE, latest);
 
     const logs = await provider.getLogs({
-      address: process.env.STAKING_ADDRESS, // ✅ FIXED
+      address: process.env.STAKING_ADDRESS,
       fromBlock: lastBlock + 1,
       toBlock,
-      topics: [[
-        ethers.id("ReferrerSet(address,address,bool)"),
+      topics: [
         ethers.id("ReferralLinked(address,address,bool)")
-      ]]
+      ]
     });
 
     for (const log of logs) {
@@ -71,10 +93,12 @@ async function poll() {
     }
 
     lastBlock = toBlock;
+    setLastBlock(lastBlock);
+
   } catch (err) {
     console.error("Indexer error:", err.message);
   }
 }
 
-console.log("Indexer started...");
+console.log("Indexer started from block", lastBlock);
 setInterval(poll, 5000);
