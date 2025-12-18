@@ -5,11 +5,12 @@ const db = require("./db");
 const provider = new ethers.JsonRpcProvider(process.env.BSC_RPC);
 
 const iface = new ethers.Interface([
-  "event ReferrerSet(address indexed user, address indexed referrer, bool isLeft)"
+  "event ReferrerSet(address indexed user, address indexed referrer, bool isLeft)",
+  "event ReferralLinked(address indexed user, address indexed referrer, bool isLeft)"
 ]);
 
 let lastBlock = Number(process.env.START_BLOCK || 0);
-const CHUNK_SIZE = 9; // Alchemy free tier: max 10 blocks
+const CHUNK_SIZE = 5;
 
 function upsertUser(user, referrer, side) {
   const parent = db
@@ -37,10 +38,13 @@ async function poll() {
     const toBlock = Math.min(lastBlock + CHUNK_SIZE, latest);
 
     const logs = await provider.getLogs({
-      address: process.env.STAKING_PROXY,
+      address: process.env.STAKING_ADDRESS, // ✅ FIXED
       fromBlock: lastBlock + 1,
       toBlock,
-      topics: [ethers.id("ReferrerSet(address,address,bool)")]
+      topics: [[
+        ethers.id("ReferrerSet(address,address,bool)"),
+        ethers.id("ReferralLinked(address,address,bool)")
+      ]]
     });
 
     for (const log of logs) {
@@ -51,7 +55,7 @@ async function poll() {
       upsertUser(user, referrer, side);
 
       console.log(
-        "Linked:",
+        "linked:",
         user,
         "->",
         referrer,
@@ -63,13 +67,9 @@ async function poll() {
 
     lastBlock = toBlock;
   } catch (err) {
-    console.error("Indexer error:", err.shortMessage || err.message);
+    console.error("Indexer error:", err.message);
   }
 }
 
-async function start() {
-  console.log("Indexer started. Polling ReferrerSet…");
-  setInterval(poll, 5000); // every 5 seconds
-}
-
-start();
+console.log("Indexer started...");
+setInterval(poll, 5000);
