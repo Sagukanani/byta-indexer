@@ -9,7 +9,7 @@ const iface = new ethers.Interface([
   "event ReferralLinked(address indexed user, address indexed referrer, bool isLeft)"
 ]);
 
-const CHUNK_SIZE = 10; // 🔥 production-friendly
+const CHUNK_SIZE = 9; // 🔥 production-friendly
 
 /* ===== lastBlock persistence ===== */
 
@@ -96,8 +96,13 @@ async function poll() {
     setLastBlock(lastBlock);
 
   } catch (err) {
-    console.error("Indexer error:", err.message);
-  }
+  console.error("Indexer error:", err.message);
+
+  // free RPC safety: infinite loop se nikalne ke liye
+  lastBlock = lastBlock + CHUNK_SIZE;
+  setLastBlock(lastBlock);
+}
+
 }
 
 console.log("Indexer started from block", lastBlock);
