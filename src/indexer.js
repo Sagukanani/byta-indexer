@@ -20,14 +20,19 @@ function upsertUser(user, referrer, side) {
   const level = parent ? parent.level + 1 : 1;
 
   db.prepare(`
-    INSERT OR IGNORE INTO users(address, referrer, side, level)
-    VALUES (?, ?, ?, ?)
-  `).run(
-    user.toLowerCase(),
-    referrer.toLowerCase(),
-    side,
-    level
-  );
+  INSERT INTO users(address, referrer, side, level)
+  VALUES (?, ?, ?, ?)
+  ON CONFLICT(address) DO UPDATE SET
+    referrer = excluded.referrer,
+    side = excluded.side,
+    level = excluded.level
+`).run(
+  user.toLowerCase(),
+  referrer.toLowerCase(),
+  side,
+  level
+);
+
 }
 
 async function poll() {
