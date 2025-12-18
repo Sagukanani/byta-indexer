@@ -9,7 +9,7 @@ const iface = new ethers.Interface([
   "event ReferralLinked(address indexed user, address indexed referrer, bool isLeft)"
 ]);
 
-const CHUNK_SIZE = 1000; // 🔥 production-friendly
+const CHUNK_SIZE = 10; // 🔥 production-friendly
 
 /* ===== lastBlock persistence ===== */
 
